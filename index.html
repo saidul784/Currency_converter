@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Astro Currency Converter</title>
+
+    <style>
+        /* --- CSS STYLES --- */
+
+        /* Basic Setup & Astro Background */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            /* Image from Unsplash - credit to Aldebaran S */
+            background-image: url('https://images.unsplash.com/photo-1534796636912-3b95b3ab5986?q=80&w=2071&auto=format&fit=crop');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed; /* Keeps background still on scroll */
+        }
+
+        /* Glassmorphism Converter Container */
+        .converter-container {
+            background: rgba(25, 25, 50, 0.7); /* Semi-transparent dark blue */
+            backdrop-filter: blur(10px); /* The "glass" effect */
+            -webkit-backdrop-filter: blur(10px); /* For Safari */
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            padding: 30px 40px;
+            width: 90%;
+            max-width: 550px;
+            text-align: center;
+            color: #f0f0f0;
+        }
+
+        h1 {
+            margin-bottom: 25px;
+            font-weight: 600;
+            letter-spacing: 1px;
+        }
+
+        /* Flex container for inputs */
+        .input-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        /* Styling for input and select elements */
+        input, select {
+            width: 100%;
+            padding: 12px;
+            font-size: 1rem;
+            color: #fff;
+            background-color: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            transition: border-color 0.2s, background-color 0.2s;
+        }
+
+        input:focus, select:focus {
+            background-color: rgba(0, 0, 0, 0.5);
+            border-color: #87CEEB; /* Sky blue */
+            outline: none;
+        }
+        
+        /* Remove number input spinner for a cleaner look */
+        input[type="number"]::-webkit-outer-spin-button,
+        input[type="number"]::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type="number"] {
+            -moz-appearance: textfield;
+        }
+
+        /* Style for the swap button */
+        #swap-button {
+            background: none;
+            border: none;
+            font-size: 1.8rem;
+            cursor: pointer;
+            color: #87CEEB; /* Sky blue */
+            padding: 5px;
+            transition: transform 0.3s ease, color 0.3s;
+        }
+
+        #swap-button:hover {
+            color: #fff;
+            transform: rotate(180deg);
+        }
+
+        /* Styling for the result area */
+        #result {
+            font-size: 1.4rem;
+            font-weight: 500;
+            min-height: 30px;
+            margin-top: 20px;
+            color: #fff;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 10px;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- --- HTML STRUCTURE --- -->
+    <div class="converter-container">
+        <h1>Astro Currency Converter</h1>
+
+        <div class="input-container">
+            <input type="number" id="amount" value="1" min="0">
+            <select id="fromCurrency"></select>
+            
+            <button id="swap-button" title="Swap currencies">&#8596;</button>
+
+            <select id="toCurrency"></select>
+        </div>
+
+        <div id="result">
+            Loading...
+        </div>
+    </div>
+
+    <script>
+        // --- JAVASCRIPT LOGIC ---
+
+        const fromCurrencySelect = document.getElementById('fromCurrency');
+        const toCurrencySelect = document.getElementById('toCurrency');
+        const amountInput = document.getElementById('amount');
+        const resultDiv = document.getElementById('result');
+        const swapButton = document.getElementById('swap-button');
+
+        const API_URL = 'https://api.frankfurter.app';
+
+        // Fetch currencies and populate dropdowns when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            populateCurrencies();
+            
+            // Add event listeners for real-time conversion
+            fromCurrencySelect.addEventListener('change', convertCurrency);
+            toCurrencySelect.addEventListener('change', convertCurrency);
+            amountInput.addEventListener('input', convertCurrency);
+            swapButton.addEventListener('click', swapCurrencies);
+        });
+
+        // Function to populate the currency <select> elements
+        async function populateCurrencies() {
+            try {
+                const response = await fetch(`${API_URL}/currencies`);
+                if (!response.ok) throw new Error('Failed to load currencies.');
+                
+                const currencies = await response.json();
+
+                for (const currencyCode in currencies) {
+                    const option1 = new Option(`${currencyCode} - ${currencies[currencyCode]}`, currencyCode);
+                    const option2 = new Option(`${currencyCode} - ${currencies[currencyCode]}`, currencyCode);
+                    fromCurrencySelect.add(option1);
+                    toCurrencySelect.add(option2);
+                }
+
+                // Set default values (e.g., USD to EUR)
+                fromCurrencySelect.value = 'USD';
+                toCurrencySelect.value = 'EUR';
+
+                // Perform the first conversion on load
+                convertCurrency();
+            } catch (error) {
+                resultDiv.textContent = 'Error: Could not load currencies.';
+                console.error(error);
+            }
+        }
+
+        // Function to get rates and calculate the conversion
+        async function convertCurrency() {
+            const amount = amountInput.value;
+            const fromCurrency = fromCurrencySelect.value;
+            const toCurrency = toCurrencySelect.value;
+
+            if (!amount || amount <= 0) {
+                resultDiv.textContent = 'Enter a valid amount.';
+                return;
+            }
+            
+            if (fromCurrency === toCurrency) {
+                resultDiv.textContent = `${parseFloat(amount).toFixed(2)} ${fromCurrency}`;
+                return;
+            }
+
+            resultDiv.textContent = 'Converting...';
+
+            try {
+                const response = await fetch(`${API_URL}/latest?amount=${amount}&from=${fromCurrency}&to=${toCurrency}`);
+                if (!response.ok) throw new Error('Conversion request failed.');
+
+                const data = await response.json();
+                const convertedAmount = data.rates[toCurrency];
+                
+                resultDiv.textContent = `${amount} ${fromCurrency} = ${convertedAmount.toFixed(2)} ${toCurrency}`;
+
+            } catch (error) {
+                resultDiv.textContent = 'Error during conversion.';
+                console.error(error);
+            }
+        }
+
+        // Function to swap the 'from' and 'to' currencies
+        function swapCurrencies() {
+            // Swap the selected values
+            const temp = fromCurrencySelect.value;
+            fromCurrencySelect.value = toCurrencySelect.value;
+            toCurrencySelect.value = temp;
+
+            // Trigger a new conversion
+            convertCurrency();
+        }
+    </script>
+</body>
+</html>
